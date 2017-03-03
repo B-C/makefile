@@ -1,6 +1,6 @@
 # Output
 OUTPUT_DIR = build
-EXE = $(OUTPUT_DIR)/exe
+EXE = $(BUILD_DIR)/exe
 STRIPED = $(EXE)-strip
 TEST = $(EXE)_test
 COVERAGE_DIR = coverage
@@ -9,6 +9,7 @@ PROFDATA = $(EXE).profdata
 
 # Build tools
 CXX = clang++-4.0
+DB = lldb
 PROF = llvm-profdata-4.0
 COV = llvm-cov-4.0
 
@@ -18,30 +19,34 @@ CXXFLAGS = -std=c++1z -Wall -Wextra -g
 LDFLAGS = -stdlib=libstdc++
 
 ifdef RELEASE
+BUILD_DIR := $(OUTPUT_DIR)/release
+CPPFLAGS += -DNDEBUG
 CXXFLAGS += -O3
+else
+BUILD_DIR := $(OUTPUT_DIR)/debug
 endif
 
 ifeq "$(MAKECMDGOALS)" "coverage"
-OUTPUT_DIR := $(OUTPUT_DIR)/coverage
+BUILD_DIR := $(OUTPUT_DIR)/coverage
 CXX_PROFILE_FLAGS := -fprofile-instr-generate -fcoverage-mapping
 CXXFLAGS += $(CXX_PROFILE_FLAGS)
 endif
 
 # Objects
-OBJS = $(patsubst src/%.cpp,$(OUTPUT_DIR)/%.o, $(wildcard src/*.cpp))
-MAIN = $(OUTPUT_DIR)/main.o
-TEST_OBJS = $(patsubst test/%.cpp,$(OUTPUT_DIR)/%.o, $(wildcard test/*.cpp))
+OBJS = $(patsubst src/%.cpp,$(BUILD_DIR)/%.o, $(wildcard src/*.cpp))
+MAIN = $(BUILD_DIR)/main.o
+TEST_OBJS = $(patsubst test/%.cpp,$(BUILD_DIR)/%.o, $(wildcard test/*.cpp))
 
 # Googletest
 GTEST_DIR = googletest/googletest
 GTEST_CPPFLAGS = -isystem $(GTEST_DIR)/include
 GTEST_SRCS = $(addprefix $(GTEST_DIR)/src/,gtest-all.cc gtest_main.cc)
-GTEST_OBJS = $(patsubst $(GTEST_DIR)/src/%.cc,$(OUTPUT_DIR)/%.o, $(GTEST_SRCS))
-GTEST_LIB = $(OUTPUT_DIR)/gtest.a
+GTEST_OBJS = $(patsubst $(GTEST_DIR)/src/%.cc,$(BUILD_DIR)/%.o, $(GTEST_SRCS))
+GTEST_LIB = $(BUILD_DIR)/gtest.a
 
 # Functions
 RUN = time ./$^
-RUN_DEBUG = lldb -o run ./$^
+RUN_DEBUG = $(DB) -o run ./$^
 LINK = $(LINK.cpp) $^ $(LOADLIBES) $(LDLIBS) -o $@
 BUILD = mkdir -p $(@D) && $(CXX) $(CXXFLAGS) $(CPPFLAGS) -c $< $(LIB_PATH) $(LIBS) -o $@
 
@@ -66,7 +71,7 @@ $(STRIPED): $(EXE)
 $(EXE): $(OBJS)
 	$(LINK)
 
-$(OBJS): $(OUTPUT_DIR)/%.o : src/%.cpp
+$(OBJS): $(BUILD_DIR)/%.o : src/%.cpp
 	$(BUILD)
 
 # Unit tests
@@ -79,10 +84,10 @@ run-test-debug: $(TEST)
 $(TEST): $(filter-out $(MAIN),$(OBJS)) $(TEST_OBJS) $(GTEST_LIB)
 	$(LINK) -lpthread
 
-$(TEST_OBJS): $(OUTPUT_DIR)/%.o : test/%.cpp
+$(TEST_OBJS): $(BUILD_DIR)/%.o : test/%.cpp
 	$(BUILD) $(GTEST_CPPFLAGS) -Isrc
 
-$(GTEST_OBJS): $(OUTPUT_DIR)/%.o : $(GTEST_DIR)/src/%.cc
+$(GTEST_OBJS): $(BUILD_DIR)/%.o : $(GTEST_DIR)/src/%.cc
 	$(filter-out $(CXX_PROFILE_FLAGS),$(BUILD)) $(GTEST_CPPFLAGS) -I$(GTEST_DIR)
 
 $(GTEST_LIB): $(GTEST_OBJS)
